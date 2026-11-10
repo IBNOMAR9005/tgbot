@@ -1,0 +1,52 @@
+name: Build telegram-bot-api
+
+# بيتشغل يدوي بس (من تاب Actions). بيبني السيرفر المحلي مرة واحدة وينشره في Releases.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make git zlib1g-dev libssl-dev gperf cmake g++
+
+      - name: Clone telegram-bot-api
+        run: git clone --recursive https://github.com/tdlib/telegram-bot-api.git tba
+
+      - name: Build (static OpenSSL + libstdc++ so it runs on any Colab image)
+        run: |
+          mkdir -p tba/build && cd tba/build
+          set +e
+          cmake -DCMAKE_BUILD_TYPE=Release -DOPENSSL_USE_STATIC_LIBS=ON \
+                -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" ..
+          cmake --build . --target telegram-bot-api -j "$(nproc)"
+          if [ $? -ne 0 ]; then
+            echo "::warning::static link failed, falling back to dynamic OpenSSL"
+            rm -f CMakeCache.txt
+            cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" ..
+            cmake --build . --target telegram-bot-api -j "$(nproc)"
+          fi
+          set -e
+          strip telegram-bot-api
+          ./telegram-bot-api --version
+          ldd telegram-bot-api || true
+
+      - name: Publish as release "tba-latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp tba/build/telegram-bot-api ./telegram-bot-api
+          chmod +x telegram-bot-api
+          gh release delete tba-latest --repo "${{ github.repository }}" --cleanup-tag -y || true
+          gh release create tba-latest ./telegram-bot-api \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "telegram-bot-api (prebuilt)" \
+            --notes "Prebuilt telegram-bot-api for Colab. Built on $(date -u +%F)."
