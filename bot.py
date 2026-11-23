@@ -32,7 +32,6 @@ AUDIO_EXT = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '
 BTN_STATUS, BTN_QUOTA, BTN_QUEUE, BTN_STOP = '📊 الحالة', '🔑 الكوتة', '📋 الطابور', '⛔ إيقاف الحالي'
 
 
-@dataclass
 class FloodSafeSession(AiohttpSession):
     """أي طلب يتعمله flood control (429) يستنى المدة اللي تليجرام قالها ويعيد المحاولة بدل ما البوت يقع."""
     async def make_request(self, bot, method, timeout=None):
@@ -47,6 +46,7 @@ class FloodSafeSession(AiohttpSession):
                 await asyncio.sleep(wait)
 
 
+@dataclass
 class Job:
     id: str
     uid: int
