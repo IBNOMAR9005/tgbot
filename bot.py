@@ -33,6 +33,20 @@ BTN_STATUS, BTN_QUOTA, BTN_QUEUE, BTN_STOP = '📊 الحالة', '🔑 الكو
 
 
 @dataclass
+class FloodSafeSession(AiohttpSession):
+    """أي طلب يتعمله flood control (429) يستنى المدة اللي تليجرام قالها ويعيد المحاولة بدل ما البوت يقع."""
+    async def make_request(self, bot, method, timeout=None):
+        for attempt in range(8):
+            try:
+                return await super().make_request(bot, method, timeout=timeout)
+            except TelegramRetryAfter as e:
+                wait = int(e.retry_after) + 2
+                if attempt == 7 or wait > 600:
+                    raise
+                print('⏳ flood control على %s، هستنى %s ثانية…' % (type(method).__name__, wait), flush=True)
+                await asyncio.sleep(wait)
+
+
 class Job:
     id: str
     uid: int
@@ -130,7 +144,7 @@ class BotApp:
         self.store = Store(os.path.join(cfg.data_dir, 'state.json'))
         self.core = pipeline.App(cfg, self.store, log.info)
         api = TelegramAPIServer.from_base(cfg.local_api, is_local=True)
-        session = AiohttpSession(api=api, timeout=7200)
+        session = FloodSafeSession(api=api, timeout=7200)
         self.bot = Bot(cfg.bot_token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         self.dp = Dispatcher()
         self.jobs = {}
