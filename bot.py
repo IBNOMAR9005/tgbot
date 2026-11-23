@@ -621,15 +621,18 @@ class BotApp:
                 return 'ناقصة (%s)' % (e.code,)
         return buf.getvalue().strip().replace('الخطوط:', '').strip() or 'تمام'
 
-    async def run(self):
-        # تسجيل الأوامر مش ضروري لتشغيل البوت؛ لو تليجرام عمل flood control نكمل عادي
+    async def _set_commands(self):
         try:
             await self.bot.set_my_commands([BotCommand(command='status', description='حالة البوت والكوتة'),
                                             BotCommand(command='queue', description='الطابور'),
                                             BotCommand(command='stop', description='إيقاف الشغل الحالي')])
         except Exception as e:
-            print('⚠️ تخطيت set_my_commands: %s' % (e,))
+            print('⚠️ تخطيت set_my_commands: %s' % (e,), flush=True)
+
+    async def run(self):
         await self.startup_report()
+        # تسجيل الأوامر في الخلفية بعد ما البوت يشتغل، عشان أي flood عليه ما يعطلش التشغيل
+        self._cmd_task = asyncio.create_task(self._set_commands())
         wk = asyncio.create_task(self.worker())
         try:
             await self.dp.start_polling(self.bot, polling_timeout=30, allowed_updates=['message', 'callback_query'])
